@@ -4,6 +4,7 @@
 
 #include "Errors.h"
 #include "validation/validation.h"
+#include "devices/Physical.h"
 #include <cstdlib>
 #include <vector>
 #include <iostream>
@@ -15,6 +16,7 @@ typedef struct TriangleApplication {
     GLFWwindow *window;
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 } TriangleApplication;
 
 TriangleApplication app;
@@ -99,6 +101,7 @@ int initVulkan() {
   if(enableValidationLayers) {
     setupDebugMessenger(app.instance, &app.debugMessenger);
   }
+  pickPhysicalDevice();
   return 0;
 }
 

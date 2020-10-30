@@ -1,7 +1,3 @@
-//
-// Created by Ntinos on 30/10/2020.
-//
-
 #include <vector>
 #include <vulkan/vulkan.h>
 #include <iostream>
