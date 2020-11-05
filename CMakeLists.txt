@@ -20,6 +20,8 @@ link_libraries(vulkan-1.lib glfw3.lib)
 
 add_executable(VulkanDemo
         main.cpp
+#        test.cpp
         Errors.h
         validation/validation.cpp validation/validation.h
-        )
+        devices/Physical.cpp devices/Physical.h
+        devices/Logical.cpp devices/Logical.h)

@@ -5,6 +5,7 @@
 #include "Errors.h"
 #include "validation/validation.h"
 #include "devices/Physical.h"
+#include "devices/Logical.h"
 #include <cstdlib>
 #include <vector>
 #include <iostream>
@@ -16,10 +17,12 @@ typedef struct TriangleApplication {
     GLFWwindow *window;
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    PhysicalDevice physicalDevice;
+    VkDevice device;
+    VkQueue graphicsQueue;
 } TriangleApplication;
 
-TriangleApplication app;
+TriangleApplication app{};
 
 void log_printSupportedExtensions(uint32_t glfwExtensionCount, const char **glfwExtensions) {
   uint32_t extensionCount = 0;
@@ -101,7 +104,18 @@ int initVulkan() {
   if(enableValidationLayers) {
     setupDebugMessenger(app.instance, &app.debugMessenger);
   }
-  pickPhysicalDevice();
+  PhysicalDevice physicalDevice = pickPhysicalDevice(app.instance);
+  if(physicalDevice.foundDevice) {
+    app.physicalDevice = physicalDevice;
+    const VkDeviceCreateInfo deviceCreateInfo = createLogicalDeviceInfo(physicalDevice.index);
+    if(vkCreateDevice(physicalDevice.device, &deviceCreateInfo, nullptr, &app.device) != VK_SUCCESS) {
+      std::cerr << "Failed to create logical device" << std::endl;
+      return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    vkGetDeviceQueue(app.device, physicalDevice.index, 0, &app.graphicsQueue);
+  } else {
+    return VK_ERROR_INITIALIZATION_FAILED;
+  }
   return 0;
 }
 
@@ -116,6 +130,7 @@ int cleanup() {
   if (enableValidationLayers) {
     cleanupDebugMessenger(app.instance, app.debugMessenger);
   }
+  vkDestroyDevice(app.device, nullptr);
   vkDestroyInstance(app.instance, nullptr);
   glfwDestroyWindow(app.window);
   glfwTerminate();
@@ -128,15 +143,15 @@ int runApplication() {
 
   int errCode;
 
-  if ((errCode = initVulkan()) != NO_ERROR) {
+  if ((errCode = initVulkan()) != VK_SUCCESS) {
     return errCode;
   }
 
-  if ((errCode = mainLoop()) != NO_ERROR) {
+  if ((errCode = mainLoop()) != VK_SUCCESS) {
     return errCode;
   }
 
-  if ((errCode = cleanup()) != NO_ERROR) {
+  if ((errCode = cleanup()) != VK_SUCCESS) {
     return errCode;
   }
 

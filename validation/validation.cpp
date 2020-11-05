@@ -73,6 +73,11 @@ bool addValidationLayerSupport(VkInstanceCreateInfo &createInfo, VkDebugUtilsMes
   return true;
 }
 
+void addValidationLayerSupport(VkDeviceCreateInfo &createInfo) {
+  createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+  createInfo.ppEnabledLayerNames = validationLayers.data();
+}
+
 static VkResult CreateDebugUtilsMessengerEXT(
     VkInstance instance,
     const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,

@@ -13,7 +13,9 @@ const bool enableValidationLayers = true;
 
 void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &);
 
-bool addValidationLayerSupport(VkInstanceCreateInfo&, VkDebugUtilsMessengerCreateInfoEXT&);
+bool addValidationLayerSupport(VkInstanceCreateInfo &, VkDebugUtilsMessengerCreateInfoEXT &);
+
+void addValidationLayerSupport(VkDeviceCreateInfo &);
 
 bool setupDebugMessenger(VkInstance, VkDebugUtilsMessengerEXT *);
 
