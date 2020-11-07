@@ -23,5 +23,4 @@ add_executable(VulkanDemo
 #        test.cpp
         Errors.h
         validation/validation.cpp validation/validation.h
-        devices/Physical.cpp devices/Physical.h
-        devices/Logical.cpp devices/Logical.h)
+        devices/Devices.cpp devices/Devices.h swapchain/Swapchain.cpp swapchain/Swapchain.h Application.h devices/PhysicalDevice.h)

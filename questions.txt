@@ -1,3 +1,6 @@
 Look further
 
  - Difference between physical and logical devices
+ - Initializing structs with empty or {}
+ - What is SRGB
+ - Simple cast vs static_cast?

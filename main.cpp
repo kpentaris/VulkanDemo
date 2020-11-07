@@ -4,25 +4,18 @@
 
 #include "Errors.h"
 #include "validation/validation.h"
-#include "devices/Physical.h"
-#include "devices/Logical.h"
+#include "devices/Devices.h"
+#include "Application.h"
 #include <cstdlib>
 #include <vector>
 #include <iostream>
 
+#define returnOnError(resultCode) if(resultCode != VK_SUCCESS) {return resultCode;}
+
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-typedef struct TriangleApplication {
-    GLFWwindow *window;
-    VkInstance instance;
-    VkDebugUtilsMessengerEXT debugMessenger;
-    PhysicalDevice physicalDevice;
-    VkDevice device;
-    VkQueue graphicsQueue;
-} TriangleApplication;
-
-TriangleApplication app{};
+Application app{};
 
 void log_printSupportedExtensions(uint32_t glfwExtensionCount, const char **glfwExtensions) {
   uint32_t extensionCount = 0;
@@ -59,7 +52,7 @@ std::vector<const char*> getRequiredExtensions() {
   return extensions;
 }
 
-int createInstance() {
+VkResult createInstance() {
   // Optional configuration struct. Provides some useful information to the
   // Vulkan driver (e.g. specific graphics engine).
   VkApplicationInfo appInfo{};
@@ -92,6 +85,14 @@ int createInstance() {
   return vkCreateInstance(&createInfo, nullptr, &app.instance);
 }
 
+VkResult createSurface() {
+  if(glfwCreateWindowSurface(app.instance, app.window, nullptr, &app.surface) != VK_SUCCESS) {
+    std::cerr << "Failed to create window surface" << std::endl;
+    return VK_ERROR_SURFACE_LOST_KHR;
+  }
+  return VK_SUCCESS;
+}
+
 GLFWwindow *initWindow() {
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -99,24 +100,17 @@ GLFWwindow *initWindow() {
   return glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 }
 
-int initVulkan() {
-  createInstance();
+VkResult initVulkan() {
+  returnOnError(createInstance())
+
   if(enableValidationLayers) {
     setupDebugMessenger(app.instance, &app.debugMessenger);
   }
-  PhysicalDevice physicalDevice = pickPhysicalDevice(app.instance);
-  if(physicalDevice.foundDevice) {
-    app.physicalDevice = physicalDevice;
-    const VkDeviceCreateInfo deviceCreateInfo = createLogicalDeviceInfo(physicalDevice.index);
-    if(vkCreateDevice(physicalDevice.device, &deviceCreateInfo, nullptr, &app.device) != VK_SUCCESS) {
-      std::cerr << "Failed to create logical device" << std::endl;
-      return VK_ERROR_INITIALIZATION_FAILED;
-    }
-    vkGetDeviceQueue(app.device, physicalDevice.index, 0, &app.graphicsQueue);
-  } else {
-    return VK_ERROR_INITIALIZATION_FAILED;
-  }
-  return 0;
+  returnOnError(createSurface())
+  returnOnError(createDevice(app))
+  vkGetDeviceQueue(app.device, app.physicalDevice.graphicsQueueFamilyIdx, 0, &app.graphicsQueue);
+  vkGetDeviceQueue(app.device, app.physicalDevice.presentationQueueFamilyIdx, 0, &app.presentationQueue);
+  return VK_SUCCESS;
 }
 
 int mainLoop() {
@@ -131,6 +125,7 @@ int cleanup() {
     cleanupDebugMessenger(app.instance, app.debugMessenger);
   }
   vkDestroyDevice(app.device, nullptr);
+  vkDestroySurfaceKHR(app.instance, app.surface, nullptr);
   vkDestroyInstance(app.instance, nullptr);
   glfwDestroyWindow(app.window);
   glfwTerminate();
@@ -159,8 +154,5 @@ int runApplication() {
 }
 
 int main() {
-  if (runApplication() != NO_ERROR) {
-    return EXIT_FAILURE;
-  }
-  return EXIT_SUCCESS;
+  return runApplication();
 }
