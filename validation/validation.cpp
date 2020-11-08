@@ -63,7 +63,7 @@ bool addValidationLayerSupport(VkInstanceCreateInfo &createInfo, VkDebugUtilsMes
     return false;
   }
   std::cout << "Adding validation layer support" << std::endl;
-  createInfo.enabledLayerCount = (uint32_t) validationLayers.size();
+  createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
   createInfo.ppEnabledLayerNames = validationLayers.data();
 
   std::cout << "Setting up Debug creation info debug messenger" << std::endl;

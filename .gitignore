@@ -4,3 +4,4 @@
 target/**
 out/**
 cmake-build-debug/**
+*.spv

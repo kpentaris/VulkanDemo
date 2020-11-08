@@ -1,5 +1,5 @@
 //
-// Created by Ntinos on 7/11/2020.
+// Created by PentaKon on 7/11/2020.
 //
 
 #ifndef VULKANDEMO_PHYSICALDEVICE_H

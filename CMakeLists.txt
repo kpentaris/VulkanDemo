@@ -19,8 +19,9 @@ link_directories(
 link_libraries(vulkan-1.lib glfw3.lib)
 
 add_executable(VulkanDemo
-        main.cpp
-#        test.cpp
-        Errors.h
+        Application.h main.cpp
         validation/validation.cpp validation/validation.h
-        devices/Devices.cpp devices/Devices.h swapchain/Swapchain.cpp swapchain/Swapchain.h Application.h devices/PhysicalDevice.h)
+        devices/Devices.cpp devices/Devices.h devices/PhysicalDevice.h
+        swapchain/Swapchain.cpp swapchain/Swapchain.h swapchain/images/ImageViews.cpp swapchain/images/ImageViews.h
+        pipeline/GraphicsPipeline.cpp pipeline/GraphicsPipeline.h
+        pipeline/Shaders.cpp pipeline/Shaders.h)

@@ -2,11 +2,11 @@
 
 #include <GLFW/glfw3.h>
 
-#include "Errors.h"
 #include "validation/validation.h"
 #include "devices/Devices.h"
-#include "Application.h"
-#include <cstdlib>
+#include "swapchain/Swapchain.h"
+#include "swapchain/images/ImageViews.h"
+#include "pipeline/GraphicsPipeline.h"
 #include <vector>
 #include <iostream>
 
@@ -26,7 +26,7 @@ void log_printSupportedExtensions(uint32_t glfwExtensionCount, const char **glfw
   for (const auto &extension : extensions) {
     std::cout << '\t' << extension.extensionName;
     const char *glfwExtension = *glfwExtensions;
-    for (int count = 0; count < glfwExtensionCount; ++count) {
+    for (size_t count = 0; count < glfwExtensionCount; ++count) {
       if (strcmp(extension.extensionName, glfwExtension) == 0) {
         std::cout << " - GLFW" << std::endl;
         goto cnt;
@@ -67,7 +67,7 @@ VkResult createInstance() {
   VkInstanceCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   createInfo.pApplicationInfo = &appInfo;
-  createInfo.enabledExtensionCount = (uint32_t) extensions.size();
+  createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
   createInfo.ppEnabledExtensionNames = extensions.data();
 
   // create info for debugging the VkInstance creation part
@@ -108,8 +108,9 @@ VkResult initVulkan() {
   }
   returnOnError(createSurface())
   returnOnError(createDevice(app))
-  vkGetDeviceQueue(app.device, app.physicalDevice.graphicsQueueFamilyIdx, 0, &app.graphicsQueue);
-  vkGetDeviceQueue(app.device, app.physicalDevice.presentationQueueFamilyIdx, 0, &app.presentationQueue);
+  returnOnError(createSwapChain(app))
+  returnOnError(createImageViews(app))
+  returnOnError(createGraphicsPipeline(app))
   return VK_SUCCESS;
 }
 
@@ -120,11 +121,22 @@ int mainLoop() {
   return 0;
 }
 
+/**
+ * Vulkan resource cleanup. The operation order MATTERS.
+ *
+ * @return
+ */
 int cleanup() {
+  for (auto imageView : app.swapChainImageViews) {
+    vkDestroyImageView(app.device, imageView, nullptr);
+  }
+  vkDestroySwapchainKHR(app.device, app.swapChain, nullptr);
+  vkDestroyDevice(app.device, nullptr);
+
   if (enableValidationLayers) {
     cleanupDebugMessenger(app.instance, app.debugMessenger);
   }
-  vkDestroyDevice(app.device, nullptr);
+
   vkDestroySurfaceKHR(app.instance, app.surface, nullptr);
   vkDestroyInstance(app.instance, nullptr);
   glfwDestroyWindow(app.window);

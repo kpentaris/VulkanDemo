@@ -1,6 +1,0 @@
-#ifndef VULKANDEMO_ERRORS_H
-#define VULKANDEMO_ERRORS_H
-
-#define NO_ERROR 0
-
-#endif //VULKANDEMO_ERRORS_H

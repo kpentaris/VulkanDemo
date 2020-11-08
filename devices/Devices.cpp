@@ -186,5 +186,7 @@ VkResult createDevice(Application &app) {
     std::cerr << "Failed to create logical device" << std::endl;
     return VK_ERROR_INITIALIZATION_FAILED;
   }
+  vkGetDeviceQueue(app.device, app.physicalDevice.graphicsQueueFamilyIdx, 0, &app.graphicsQueue);
+  vkGetDeviceQueue(app.device, app.physicalDevice.presentationQueueFamilyIdx, 0, &app.presentationQueue);
   return VK_SUCCESS;
 }

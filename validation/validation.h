@@ -1,5 +1,5 @@
 //
-// Created by Ntinos on 30/10/2020.
+// Created by PentaKon on 30/10/2020.
 //
 
 #ifndef VULKANDEMO_VALIDATION_H
