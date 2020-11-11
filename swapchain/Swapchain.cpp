@@ -175,7 +175,7 @@ VkResult createSwapChain(Application &app) {
   vkGetSwapchainImagesKHR(app.device, app.swapChain, &imageCount, app.swapChainImages.data());
 
   app.imageFormat = createInfo.imageFormat;
-  app.extent2D = createInfo.imageExtent;
+  app.swapChainExtent = createInfo.imageExtent;
 
   return VK_SUCCESS;
 }

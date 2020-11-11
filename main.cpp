@@ -127,6 +127,7 @@ int mainLoop() {
  * @return
  */
 int cleanup() {
+  vkDestroyPipelineLayout(app.device, app.pipelineLayout, nullptr);
   for (auto imageView : app.swapChainImageViews) {
     vkDestroyImageView(app.device, imageView, nullptr);
   }

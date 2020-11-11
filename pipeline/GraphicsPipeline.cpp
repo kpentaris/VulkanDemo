@@ -8,11 +8,19 @@
 #include "GraphicsPipeline.h"
 #include "Shaders.h"
 
+/**
+ * Takes shader code in a string and creates a VkShaderModule.
+ *
+ * @param device
+ * @param shaderCode
+ * @param error
+ * @return
+ */
 VkShaderModule createShaderModule(VkDevice device, const std::vector<char> &shaderCode, VkResult &error) {
   VkShaderModuleCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   createInfo.codeSize = shaderCode.size();
-  createInfo.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data());
+  createInfo.pCode = reinterpret_cast<const uint32_t *>(shaderCode.data());
   error = VK_SUCCESS;
 
   VkShaderModule shaderModule;
@@ -23,18 +31,28 @@ VkShaderModule createShaderModule(VkDevice device, const std::vector<char> &shad
   return shaderModule;
 }
 
+/**
+ * Creates the graphics pipeline.
+ * 1. Load shader codes from .spv files
+ * 2. Create shader modules for each shader
+ * 3. Create shader stages for each shader module
+ * 4. Create vertex input state and input assembly state
+ *
+ * @param app
+ * @return
+ */
 VkResult createGraphicsPipeline(Application &app) {
   std::vector<char> vertexShader{};
   readShaderFile("../shaders/vert.spv", vertexShader);
 
   std::vector<char> fragmentShader{};
   readShaderFile("../shaders/frag.spv", fragmentShader);
-  
+
   VkResult error = VK_SUCCESS;
   VkShaderModule vertShaderModule = createShaderModule(app.device, vertexShader, error);
   VkShaderModule fragShaderModule = createShaderModule(app.device, fragmentShader, error);
 
-  if(error != VK_SUCCESS) {
+  if (error != VK_SUCCESS) {
     return error;
   }
 
@@ -51,6 +69,112 @@ VkResult createGraphicsPipeline(Application &app) {
   fragShaderStageInfo.pName = "main";
 
   VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+  // Describes the format of the vertex data that will be passed to the vertex shader
+  VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+  vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  vertexInputInfo.vertexBindingDescriptionCount = 0;
+  vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
+  vertexInputInfo.vertexAttributeDescriptionCount = 0;
+  vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+
+  // Describes the geometry that will be drawn from the vertices. Also describes if primitive restart should be enabled
+  VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+  inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+  inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+  // Viewport is the portion of the framebuffer that will be rendered as output
+  VkViewport viewport{};
+  viewport.x = 0.0f;
+  viewport.y = 0.0f;
+  viewport.width = (float) app.swapChainExtent.width;
+  viewport.height = (float) app.swapChainExtent.height;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+
+  // Any pixels outside the scissor rectangles will be discarded by the rasterizer
+  VkRect2D scissor{};
+  scissor.offset = {0, 0};
+  scissor.extent = app.swapChainExtent;
+
+  // Create viewport state using the viewport and scissor rectangles
+  VkPipelineViewportStateCreateInfo viewportState{};
+  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  viewportState.viewportCount = 1;
+  viewportState.pViewports = &viewport;
+  viewportState.scissorCount = 1;
+  viewportState.pScissors = &scissor;
+
+  // Configuration of the rasterizer
+  VkPipelineRasterizationStateCreateInfo rasterizer{};
+  rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  rasterizer.depthClampEnable = VK_FALSE; // if true clamps fragments outside of the near/far planes instead of discarding them
+  rasterizer.rasterizerDiscardEnable = VK_FALSE; // disables the rasterizer. Use for when we just don't want to output fragments to framebuffer
+  rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+  rasterizer.lineWidth = 1.0f; // line thickness is terms of number of fragments
+  rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // specifies the type of face culling to use
+  rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // specifies which faces are consider front faces
+  rasterizer.depthBiasEnable = VK_FALSE; // might be used for shadow mapping
+  rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+  rasterizer.depthBiasClamp = 0.0f; // Optional
+  rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+
+  // Multisampling configuration
+  VkPipelineMultisampleStateCreateInfo multisampling{};
+  multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  multisampling.sampleShadingEnable = VK_FALSE;
+  multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  multisampling.minSampleShading = 1.0f; // Optional
+  multisampling.pSampleMask = nullptr; // Optional
+  multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+  multisampling.alphaToOneEnable = VK_FALSE; // Optional
+
+  // Depth/stencil testing goes here
+
+  // Color blending.
+  // Combining the color the fragment shader returns with the color that is already in the framebuffer.
+  // At the moment we disable all blending and simply pass the color of the fragment shader
+  // directly as the new color of the framebuffer.
+
+  // Color blending per framebuffer (we only have 1)
+  VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+  colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  colorBlendAttachment.blendEnable = VK_FALSE; // if blend -> false, the following is optional
+  colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+  colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+  colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+  colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+  colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+  colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+
+  // Global color blending for all framebuffers. If logicOpEnable is true disables all per-framebuffer configurations apart from colorWriteMask
+  VkPipelineColorBlendStateCreateInfo colorBlending{};
+  colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  colorBlending.logicOpEnable = VK_FALSE;
+  colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
+  colorBlending.attachmentCount = 1;
+  colorBlending.pAttachments = &colorBlendAttachment;
+  colorBlending.blendConstants[0] = 0.0f; // Optional
+  colorBlending.blendConstants[1] = 0.0f; // Optional
+  colorBlending.blendConstants[2] = 0.0f; // Optional
+  colorBlending.blendConstants[3] = 0.0f; // Optional
+
+  // Possibly add pipeline dynamic state
+
+  // Create pipeline layout
+  VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  pipelineLayoutInfo.setLayoutCount = 0; // Optional
+  pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+  pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+  pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+  error = vkCreatePipelineLayout(app.device, &pipelineLayoutInfo, nullptr, &app.pipelineLayout);
+  if (error != VK_SUCCESS) {
+    std::cerr << "Unable to create pipeline layout" << std::endl;
+  }
+
 
   vkDestroyShaderModule(app.device, fragShaderModule, nullptr);
   vkDestroyShaderModule(app.device, vertShaderModule, nullptr);

@@ -25,8 +25,10 @@ typedef struct Application {
     VkSwapchainKHR swapChain;
     std::vector<VkImage> swapChainImages;
     VkFormat imageFormat;
-    VkExtent2D extent2D;
+    VkExtent2D swapChainExtent;
 
     std::vector<VkImageView> swapChainImageViews;
+
+    VkPipelineLayout pipelineLayout;
 } Application;
 #endif //VULKANDEMO_APPLICATION_H
