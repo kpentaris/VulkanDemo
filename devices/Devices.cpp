@@ -187,6 +187,6 @@ VkResult createDevice(Application &app) {
     return VK_ERROR_INITIALIZATION_FAILED;
   }
   vkGetDeviceQueue(app.device, app.physicalDevice.graphicsQueueFamilyIdx, 0, &app.graphicsQueue);
-  vkGetDeviceQueue(app.device, app.physicalDevice.presentationQueueFamilyIdx, 0, &app.presentationQueue);
+  vkGetDeviceQueue(app.device, app.physicalDevice.presentationQueueFamilyIdx, 0, &app.presentQueue);
   return VK_SUCCESS;
 }

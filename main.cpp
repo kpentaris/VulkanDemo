@@ -38,13 +38,13 @@ void log_printSupportedExtensions(uint32_t glfwExtensionCount, const char **glfw
   }
 }
 
-std::vector<const char*> getRequiredExtensions() {
+std::vector<const char *> getRequiredExtensions() {
   uint32_t glfwExtensionCount = 0;
-  const char** glfwExtensions;
+  const char **glfwExtensions;
   glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
   log_printSupportedExtensions(glfwExtensionCount, glfwExtensions);
 
-  std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+  std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
   if (enableValidationLayers) {
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -74,8 +74,8 @@ VkResult createInstance() {
   // create info for debugging the VkInstance creation part
   VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo; // place here to ensure existence during the vkCreateInstance call
 
-  if(enableValidationLayers) {
-    if(!addValidationLayerSupport(createInfo, debugCreateInfo)) {
+  if (enableValidationLayers) {
+    if (!addValidationLayerSupport(createInfo, debugCreateInfo)) {
       return VK_ERROR_VALIDATION_FAILED_EXT;
     }
   } else {
@@ -87,7 +87,7 @@ VkResult createInstance() {
 }
 
 VkResult createSurface() {
-  if(glfwCreateWindowSurface(app.instance, app.window, nullptr, &app.surface) != VK_SUCCESS) {
+  if (glfwCreateWindowSurface(app.instance, app.window, nullptr, &app.surface) != VK_SUCCESS) {
     std::cerr << "Failed to create window surface" << std::endl;
     return VK_ERROR_SURFACE_LOST_KHR;
   }
@@ -118,7 +118,7 @@ GLFWwindow *initWindow() {
 VkResult initVulkan() {
   returnOnError(createInstance())
 
-  if(enableValidationLayers) {
+  if (enableValidationLayers) {
     setupDebugMessenger(app.instance, &app.debugMessenger);
   }
   returnOnError(createSurface())
@@ -134,14 +134,51 @@ VkResult initVulkan() {
   return VK_SUCCESS;
 }
 
-void drawFrame() {
+VkResult drawFrame() {
+  uint32_t imageIndex; // refers to the index of the acquired swap chain image from the swapChainImages. We use that index to pick the correct command buffer
+  VkResult errorCode = vkAcquireNextImageKHR(app.device, app.swapChain, UINT64_MAX, app.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+  throwOnError(errorCode, "Failed to acquire next image")
 
+  VkSubmitInfo submitInfo{}; // command buffer submission info
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  // the waitSemaphores array and waitStages array are matched 1-1. The Xth indexed semaphore will be used at the Xth indexed stage
+  VkSemaphore waitSemaphores[] = {app.imageAvailableSemaphore};
+  VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT}; // does this mean the semaphore will be signaled once we exit the frag-shader?
+  submitInfo.waitSemaphoreCount = 1;
+  submitInfo.pWaitSemaphores = waitSemaphores;
+  submitInfo.pWaitDstStageMask = waitStages;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &app.commandBuffers[imageIndex];
+
+  // specify which semaphores to signal once the command buffer has finished execution
+  VkSemaphore signalSemaphores[] = {app.renderFinishedSemaphore};
+  submitInfo.signalSemaphoreCount = 1;
+  submitInfo.pSignalSemaphores = signalSemaphores;
+
+  errorCode = vkQueueSubmit(app.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  throwOnError(errorCode, "Failed to submit draw command buffer")
+
+  VkPresentInfoKHR presentInfo{};
+  presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  presentInfo.waitSemaphoreCount = 1;
+  presentInfo.pWaitSemaphores = signalSemaphores;
+  VkSwapchainKHR swapChains[] = {app.swapChain};
+  presentInfo.swapchainCount = 1;
+  presentInfo.pSwapchains = swapChains;
+  presentInfo.pImageIndices = &imageIndex;
+  presentInfo.pResults = nullptr; // optional
+
+  errorCode = vkQueuePresentKHR(app.presentQueue, &presentInfo);
+  throwOnError(errorCode, "Queue present failed")
+
+  error:
+  return errorCode;
 }
 
 int mainLoop() {
   while (!glfwWindowShouldClose(app.window)) {
     glfwPollEvents();
-    drawFrame();
+    returnOnError(drawFrame());
   }
   return 0;
 }
@@ -182,21 +219,11 @@ int runApplication() {
   GLFWwindow *window = initWindow();
   app.window = window;
 
-  int errCode;
+  returnOnError(initVulkan())
+  returnOnError(mainLoop())
+  returnOnError(cleanup())
 
-  if ((errCode = initVulkan()) != VK_SUCCESS) {
-    return errCode;
-  }
-
-  if ((errCode = mainLoop()) != VK_SUCCESS) {
-    return errCode;
-  }
-
-  if ((errCode = cleanup()) != VK_SUCCESS) {
-    return errCode;
-  }
-
-  return errCode;
+  return VK_SUCCESS;
 }
 
 int main() {

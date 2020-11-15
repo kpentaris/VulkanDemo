@@ -22,7 +22,7 @@ typedef struct Application {
     PhysicalDevice physicalDevice;
     VkDevice device;
     VkQueue graphicsQueue;
-    VkQueue presentationQueue;
+    VkQueue presentQueue;
 
     VkSwapchainKHR swapChain;
     std::vector<VkImage> swapChainImages;
