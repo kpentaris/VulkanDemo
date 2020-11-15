@@ -24,4 +24,4 @@ add_executable(VulkanDemo
         devices/Devices.cpp devices/Devices.h devices/PhysicalDevice.h
         swapchain/Swapchain.cpp swapchain/Swapchain.h swapchain/images/ImageViews.cpp swapchain/images/ImageViews.h
         pipeline/GraphicsPipeline.cpp pipeline/GraphicsPipeline.h
-        pipeline/Shaders.cpp pipeline/Shaders.h)
+        pipeline/Shaders.cpp pipeline/Shaders.h pipeline/Commands.cpp pipeline/Commands.h)

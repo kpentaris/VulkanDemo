@@ -5,6 +5,8 @@
 #ifndef VULKANDEMO_APPLICATION_H
 #define VULKANDEMO_APPLICATION_H
 
+#define throwOnError(errorCode, message) if(errorCode != VK_SUCCESS) {std::cerr << message << std::endl; goto error;}
+
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 #include <vector>
@@ -28,7 +30,17 @@ typedef struct Application {
     VkExtent2D swapChainExtent;
 
     std::vector<VkImageView> swapChainImageViews;
+    std::vector<VkFramebuffer> swapChainFramebuffers;
 
+    VkRenderPass  renderPass;
     VkPipelineLayout pipelineLayout;
+    VkPipeline graphicsPipeline;
+
+    VkCommandPool commandPool;
+    std::vector<VkCommandBuffer> commandBuffers;
+
+    // Semaphores
+    VkSemaphore imageAvailableSemaphore;
+    VkSemaphore renderFinishedSemaphore;
 } Application;
 #endif //VULKANDEMO_APPLICATION_H

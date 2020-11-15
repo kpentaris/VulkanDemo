@@ -15,6 +15,7 @@
  * @return
  */
 VkResult createImageViews(Application &app) {
+  VkResult errorCode;
   app.swapChainImageViews.resize(app.swapChainImages.size());
   for (size_t i = 0; i < app.swapChainImages.size(); ++i) {
     VkImageViewCreateInfo createInfo{};
@@ -35,11 +36,14 @@ VkResult createImageViews(Application &app) {
     createInfo.subresourceRange.baseArrayLayer = 0;
     createInfo.subresourceRange.layerCount = 1;
 
-    VkResult result = vkCreateImageView(app.device, &createInfo, nullptr, &app.swapChainImageViews[i]);
-    if(result != VK_SUCCESS) {
+    errorCode = vkCreateImageView(app.device, &createInfo, nullptr, &app.swapChainImageViews[i]);
+    if(errorCode != VK_SUCCESS) {
       std::cerr << "Unable to create image views" << std::endl;
+      goto error;
     }
-    std::cout << "Created image views" << std::endl;
-    return result;
   }
+  std::cout << "Created image views" << std::endl;
+
+  error:
+  return errorCode;
 }

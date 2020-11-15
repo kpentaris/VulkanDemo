@@ -1,6 +1,7 @@
 //
 // Created by PentaKon on 8/11/2020.
 //
+#pragma warning(disable:4533)
 
 #include <vulkan/vulkan.h>
 #include <vector>
@@ -48,12 +49,12 @@ VkResult createGraphicsPipeline(Application &app) {
   std::vector<char> fragmentShader{};
   readShaderFile("../shaders/frag.spv", fragmentShader);
 
-  VkResult error = VK_SUCCESS;
-  VkShaderModule vertShaderModule = createShaderModule(app.device, vertexShader, error);
-  VkShaderModule fragShaderModule = createShaderModule(app.device, fragmentShader, error);
+  VkResult errorCode = VK_SUCCESS;
+  VkShaderModule vertShaderModule = createShaderModule(app.device, vertexShader, errorCode);
+  VkShaderModule fragShaderModule = createShaderModule(app.device, fragmentShader, errorCode);
 
-  if (error != VK_SUCCESS) {
-    return error;
+  if (errorCode != VK_SUCCESS) {
+    goto throwError;
   }
 
   VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
@@ -170,13 +171,115 @@ VkResult createGraphicsPipeline(Application &app) {
   pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
   pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
-  error = vkCreatePipelineLayout(app.device, &pipelineLayoutInfo, nullptr, &app.pipelineLayout);
-  if (error != VK_SUCCESS) {
+  errorCode = vkCreatePipelineLayout(app.device, &pipelineLayoutInfo, nullptr, &app.pipelineLayout);
+  if (errorCode != VK_SUCCESS) {
     std::cerr << "Unable to create pipeline layout" << std::endl;
+    goto throwError;
   }
 
+  VkGraphicsPipelineCreateInfo pipelineInfo{};
+  pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+  pipelineInfo.stageCount = 1;
+  pipelineInfo.pStages = shaderStages;
+  pipelineInfo.pVertexInputState = &vertexInputInfo;
+  pipelineInfo.pInputAssemblyState = &inputAssembly;
+  pipelineInfo.pViewportState = &viewportState;
+  pipelineInfo.pRasterizationState = &rasterizer;
+  pipelineInfo.pMultisampleState = &multisampling;
+  pipelineInfo.pDepthStencilState = nullptr; // Optional
+  pipelineInfo.pColorBlendState = &colorBlending;
+  pipelineInfo.pDynamicState = nullptr; // Optional
+  pipelineInfo.layout = app.pipelineLayout;
+  pipelineInfo.renderPass = app.renderPass;
+  pipelineInfo.subpass = 0; // index of the supbass where the graphics pipeline will be used
+  pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
+  pipelineInfo.basePipelineIndex = -1; // Optional
 
+  // the graphics pipeline creation is slow but can be drastically sped up by providing a pipeline cache
+  // as the second argument which can even be serialized and stored for quick engine startup
+  errorCode = vkCreateGraphicsPipelines(app.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &app.graphicsPipeline);
+  if(errorCode != VK_SUCCESS) {
+    std::cerr << "Unable to create graphics pipeline" << std::endl;
+    goto throwError;
+  }
+
+  throwError:
   vkDestroyShaderModule(app.device, fragShaderModule, nullptr);
   vkDestroyShaderModule(app.device, vertShaderModule, nullptr);
-  return error;
+  return errorCode;
+}
+
+/**
+ * Create the render pass which will work on the framebuffer.
+ * The framebuffer can have attachments for color, depth and stencil.
+ * Each render pass can consist of multiple subpasses that apply
+ * post-processing operations to the framebuffer, incrementally.
+ * The subpasses must know what attachments the framebuffer that
+ * they operate on has and the render pass must know which framebuffer
+ * it will work on and what subpasses it will be performing.
+ *
+ * @param app
+ * @return
+ */
+VkResult createRenderPass(Application &app) {
+  // description of the attachments used in the framebuffer
+  VkAttachmentDescription colorAttachment{};
+  colorAttachment.format = app.imageFormat;
+  colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+  colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+  // attachment reference to be used by the render subpasses
+  VkAttachmentReference colorAttachmentRef{};
+  colorAttachmentRef.attachment = 0;
+  colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+  // render subpass
+  VkSubpassDescription subpass{};
+  subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  subpass.colorAttachmentCount = 1;
+  subpass.pColorAttachments = &colorAttachmentRef;
+
+  VkRenderPassCreateInfo  renderPassInfo{};
+  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+  renderPassInfo.attachmentCount = 1;
+  renderPassInfo.pAttachments = &colorAttachment;
+  renderPassInfo.subpassCount = 1;
+  renderPassInfo.pSubpasses = &subpass;
+
+  return vkCreateRenderPass(app.device, &renderPassInfo, nullptr, &app.renderPass);
+}
+
+/**
+ * Creates the framebuffers that are the frontend to our swapchain images.
+ * Assigns the created renderpass to each one of them.
+ *
+ * @param app
+ * @return
+ */
+VkResult createFramebuffers(Application &app) {
+  VkResult errorCode;
+  app.swapChainFramebuffers.resize(app.swapChainImageViews.size());
+  for (size_t i = 0; i < app.swapChainImageViews.size(); i++) {
+    VkImageView *attachments = &app.swapChainImageViews[i];
+    VkFramebufferCreateInfo framebufferInfo{};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = app.renderPass;
+    framebufferInfo.attachmentCount = 1;
+    framebufferInfo.pAttachments = attachments;
+    framebufferInfo.width = app.swapChainExtent.width;
+    framebufferInfo.height = app.swapChainExtent.height;
+    framebufferInfo.layers = 1;
+
+    errorCode = vkCreateFramebuffer(app.device, &framebufferInfo, nullptr, &app.swapChainFramebuffers[i]);
+    if(errorCode != VK_SUCCESS) {
+      std::cerr << "Unable to create framebuffer" << std::endl;
+      break;
+    }
+  }
+  return errorCode;
 }

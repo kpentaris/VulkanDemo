@@ -9,4 +9,4 @@ Look further
  - Check out Vulkan libshaderc for runtime shader compilation
  - Check out reinterpret_cast
  - Look up face culling, anti-aliasing
- 
+ - Fences vs Semaphores

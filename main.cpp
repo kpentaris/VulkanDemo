@@ -7,6 +7,7 @@
 #include "swapchain/Swapchain.h"
 #include "swapchain/images/ImageViews.h"
 #include "pipeline/GraphicsPipeline.h"
+#include "pipeline/Commands.h"
 #include <vector>
 #include <iostream>
 
@@ -93,6 +94,20 @@ VkResult createSurface() {
   return VK_SUCCESS;
 }
 
+VkResult createSemaphores(Application &app) {
+  VkSemaphoreCreateInfo semaphoreInfo{};
+  semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+  VkResult errorCode;
+
+  errorCode = vkCreateSemaphore(app.device, &semaphoreInfo, nullptr, &app.imageAvailableSemaphore);
+  throwOnError(errorCode, "Unable to create image available semaphore")
+  errorCode = vkCreateSemaphore(app.device, &semaphoreInfo, nullptr, &app.renderFinishedSemaphore);
+  throwOnError(errorCode, "Unable to create render finished semaphore")
+
+  error:
+  return errorCode;
+}
+
 GLFWwindow *initWindow() {
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -110,13 +125,23 @@ VkResult initVulkan() {
   returnOnError(createDevice(app))
   returnOnError(createSwapChain(app))
   returnOnError(createImageViews(app))
+  returnOnError(createRenderPass(app))
   returnOnError(createGraphicsPipeline(app))
+  returnOnError(createFramebuffers(app))
+  returnOnError(createCommandPool(app))
+  returnOnError(createCommandBuffers(app))
+  returnOnError(createSemaphores(app))
   return VK_SUCCESS;
+}
+
+void drawFrame() {
+
 }
 
 int mainLoop() {
   while (!glfwWindowShouldClose(app.window)) {
     glfwPollEvents();
+    drawFrame();
   }
   return 0;
 }
@@ -127,7 +152,15 @@ int mainLoop() {
  * @return
  */
 int cleanup() {
+  vkDestroySemaphore(app.device, app.renderFinishedSemaphore, nullptr);
+  vkDestroySemaphore(app.device, app.imageAvailableSemaphore, nullptr);
+  vkDestroyCommandPool(app.device, app.commandPool, nullptr);
+  for (const auto &framebuffer : app.swapChainFramebuffers) {
+    vkDestroyFramebuffer(app.device, framebuffer, nullptr);
+  }
+  vkDestroyPipeline(app.device, app.graphicsPipeline, nullptr);
   vkDestroyPipelineLayout(app.device, app.pipelineLayout, nullptr);
+  vkDestroyRenderPass(app.device, app.renderPass, nullptr);
   for (auto imageView : app.swapChainImageViews) {
     vkDestroyImageView(app.device, imageView, nullptr);
   }
