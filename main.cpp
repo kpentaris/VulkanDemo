@@ -11,8 +11,6 @@
 #include <vector>
 #include <iostream>
 
-#define returnOnError(resultCode) if(resultCode != VK_SUCCESS) {return resultCode;}
-
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
@@ -94,15 +92,29 @@ VkResult createSurface() {
   return VK_SUCCESS;
 }
 
-VkResult createSemaphores(Application &app) {
+VkResult createSyncObjects(Application &app) {
+  app.imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+  app.renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+  app.inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+  app.imagesInFlight.resize(app.swapChainImages.size(), VK_NULL_HANDLE);
+
   VkSemaphoreCreateInfo semaphoreInfo{};
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+  VkFenceCreateInfo fenceInfo{};
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
   VkResult errorCode;
 
-  errorCode = vkCreateSemaphore(app.device, &semaphoreInfo, nullptr, &app.imageAvailableSemaphore);
-  throwOnError(errorCode, "Unable to create image available semaphore")
-  errorCode = vkCreateSemaphore(app.device, &semaphoreInfo, nullptr, &app.renderFinishedSemaphore);
-  throwOnError(errorCode, "Unable to create render finished semaphore")
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    errorCode = vkCreateSemaphore(app.device, &semaphoreInfo, nullptr, &app.imageAvailableSemaphores[i]);
+    throwOnError(errorCode, "Unable to create image available semaphore")
+    errorCode = vkCreateSemaphore(app.device, &semaphoreInfo, nullptr, &app.renderFinishedSemaphores[i]);
+    throwOnError(errorCode, "Unable to create render finished semaphore")
+    errorCode = vkCreateFence(app.device, &fenceInfo, nullptr, &app.inFlightFences[i]);
+    throwOnError(errorCode, "Unable to create fence")
+  }
 
   error:
   return errorCode;
@@ -116,34 +128,56 @@ GLFWwindow *initWindow() {
 }
 
 VkResult initVulkan() {
-  returnOnError(createInstance())
+  VkResult errorCode = createInstance();
+  returnOnError(errorCode)
 
   if (enableValidationLayers) {
     setupDebugMessenger(app.instance, &app.debugMessenger);
   }
-  returnOnError(createSurface())
-  returnOnError(createDevice(app))
-  returnOnError(createSwapChain(app))
-  returnOnError(createImageViews(app))
-  returnOnError(createRenderPass(app))
-  returnOnError(createGraphicsPipeline(app))
-  returnOnError(createFramebuffers(app))
-  returnOnError(createCommandPool(app))
-  returnOnError(createCommandBuffers(app))
-  returnOnError(createSemaphores(app))
+  errorCode = createSurface();
+  returnOnError(errorCode)
+  errorCode = createDevice(app);
+  returnOnError(errorCode)
+  errorCode = createSwapChain(app);
+  returnOnError(errorCode)
+  errorCode = createImageViews(app);
+  returnOnError(errorCode)
+  errorCode = createRenderPass(app);
+  returnOnError(errorCode)
+  errorCode = createGraphicsPipeline(app);
+  returnOnError(errorCode)
+  errorCode = createFramebuffers(app);
+  returnOnError(errorCode)
+  errorCode = createCommandPool(app);
+  returnOnError(errorCode)
+  errorCode = createCommandBuffers(app);
+  returnOnError(errorCode)
+  errorCode = createSyncObjects(app);
+  returnOnError(errorCode)
   return VK_SUCCESS;
 }
 
 VkResult drawFrame() {
+  vkWaitForFences(app.device, 1, &app.inFlightFences[app.currentFrame], VK_TRUE, UINT64_MAX);
   uint32_t imageIndex; // refers to the index of the acquired swap chain image from the swapChainImages. We use that index to pick the correct command buffer
-  VkResult errorCode = vkAcquireNextImageKHR(app.device, app.swapChain, UINT64_MAX, app.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+  // vkAcquire does not seem to guarantee that it will provide a swapchain image that is not in use. We have to manually synchronize on the images
+  // as well using the inFlightFences (which are used for synchronizing all resources for each frame, guaranteeing they are used only on one frame
+  // at a time)
+  VkResult errorCode = vkAcquireNextImageKHR(app.device, app.swapChain, UINT64_MAX, app.imageAvailableSemaphores[app.currentFrame], VK_NULL_HANDLE, &imageIndex);
   throwOnError(errorCode, "Failed to acquire next image")
+  // it is possible that we've been assigned an images from the swapchain that is still 'in-flight' and we must wait for it to become available
+  if(app.imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+    vkWaitForFences(app.device, 1, &app.imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+  }
+  app.imagesInFlight[imageIndex] = app.inFlightFences[app.currentFrame];
 
   VkSubmitInfo submitInfo{}; // command buffer submission info
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   // the waitSemaphores array and waitStages array are matched 1-1. The Xth indexed semaphore will be used at the Xth indexed stage
-  VkSemaphore waitSemaphores[] = {app.imageAvailableSemaphore};
-  VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT}; // does this mean the semaphore will be signaled once we exit the frag-shader?
+  VkSemaphore waitSemaphores[] = {app.imageAvailableSemaphores[app.currentFrame]};
+  VkPipelineStageFlags waitStages[] = {
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT}; // does this mean the semaphore will be signaled once we exit the frag-shader?
   submitInfo.waitSemaphoreCount = 1;
   submitInfo.pWaitSemaphores = waitSemaphores;
   submitInfo.pWaitDstStageMask = waitStages;
@@ -151,11 +185,13 @@ VkResult drawFrame() {
   submitInfo.pCommandBuffers = &app.commandBuffers[imageIndex];
 
   // specify which semaphores to signal once the command buffer has finished execution
-  VkSemaphore signalSemaphores[] = {app.renderFinishedSemaphore};
+  VkSemaphore signalSemaphores[] = {app.renderFinishedSemaphores[app.currentFrame]};
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = signalSemaphores;
 
-  errorCode = vkQueueSubmit(app.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  vkResetFences(app.device, 1, &app.inFlightFences[app.currentFrame]);
+// both a signal semaphore (render finished) and fences are used for synchronization on the queue operations
+  errorCode = vkQueueSubmit(app.graphicsQueue, 1, &submitInfo, app.inFlightFences[app.currentFrame]);
   throwOnError(errorCode, "Failed to submit draw command buffer")
 
   VkPresentInfoKHR presentInfo{};
@@ -171,16 +207,23 @@ VkResult drawFrame() {
   errorCode = vkQueuePresentKHR(app.presentQueue, &presentInfo);
   throwOnError(errorCode, "Queue present failed")
 
+  app.currentFrame = (app.currentFrame + 1) % MAX_FRAMES_IN_FLIGHT; // advance to next frame
   error:
   return errorCode;
 }
 
 int mainLoop() {
+  VkResult errorCode = VK_SUCCESS;
   while (!glfwWindowShouldClose(app.window)) {
     glfwPollEvents();
-    returnOnError(drawFrame());
+    errorCode = drawFrame();
+    if (errorCode != VK_SUCCESS) {
+      break;
+    }
   }
-  return 0;
+  vkDeviceWaitIdle(app.device);
+  vkQueueWaitIdle(app.presentQueue);
+  return errorCode;
 }
 
 /**
@@ -189,8 +232,11 @@ int mainLoop() {
  * @return
  */
 int cleanup() {
-  vkDestroySemaphore(app.device, app.renderFinishedSemaphore, nullptr);
-  vkDestroySemaphore(app.device, app.imageAvailableSemaphore, nullptr);
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    vkDestroySemaphore(app.device, app.renderFinishedSemaphores[i], nullptr);
+    vkDestroySemaphore(app.device, app.imageAvailableSemaphores[i], nullptr);
+    vkDestroyFence(app.device, app.inFlightFences[i], nullptr);
+  }
   vkDestroyCommandPool(app.device, app.commandPool, nullptr);
   for (const auto &framebuffer : app.swapChainFramebuffers) {
     vkDestroyFramebuffer(app.device, framebuffer, nullptr);
@@ -219,11 +265,14 @@ int runApplication() {
   GLFWwindow *window = initWindow();
   app.window = window;
 
-  returnOnError(initVulkan())
-  returnOnError(mainLoop())
-  returnOnError(cleanup())
+  int errorCode = initVulkan();
+  returnOnError(errorCode)
+  errorCode = mainLoop();
+  returnOnError(errorCode)
+  errorCode = cleanup();
+  returnOnError(errorCode)
 
-  return VK_SUCCESS;
+  return errorCode;
 }
 
 int main() {

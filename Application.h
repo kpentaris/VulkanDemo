@@ -5,12 +5,15 @@
 #ifndef VULKANDEMO_APPLICATION_H
 #define VULKANDEMO_APPLICATION_H
 
+#define returnOnError(errorCode) if(errorCode != VK_SUCCESS) {return errorCode;}
 #define throwOnError(errorCode, message) if(errorCode != VK_SUCCESS) {std::cerr << message << std::endl; goto error;}
 
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 #include <vector>
 #include "devices/PhysicalDevice.h"
+
+const int MAX_FRAMES_IN_FLIGHT = 2;
 
 typedef struct Application {
     GLFWwindow *window;
@@ -32,7 +35,7 @@ typedef struct Application {
     std::vector<VkImageView> swapChainImageViews;
     std::vector<VkFramebuffer> swapChainFramebuffers;
 
-    VkRenderPass  renderPass;
+    VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
 
@@ -40,7 +43,10 @@ typedef struct Application {
     std::vector<VkCommandBuffer> commandBuffers;
 
     // Semaphores
-    VkSemaphore imageAvailableSemaphore;
-    VkSemaphore renderFinishedSemaphore;
+    std::vector<VkSemaphore> imageAvailableSemaphores;
+    std::vector<VkSemaphore> renderFinishedSemaphores;
+    std::vector<VkFence> inFlightFences;
+    std::vector<VkFence> imagesInFlight;
+    size_t currentFrame = 0;
 } Application;
 #endif //VULKANDEMO_APPLICATION_H
