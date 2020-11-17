@@ -120,11 +120,73 @@ VkResult createSyncObjects(Application &app) {
   return errorCode;
 }
 
-GLFWwindow *initWindow() {
+/**
+ * Cleans up the existing swapchain resources.
+ *
+ * @return
+ */
+void cleanupSwapChain() {
+  for (const auto &framebuffer : app.swapChainFramebuffers) {
+    vkDestroyFramebuffer(app.device, framebuffer, nullptr);
+  }
+  vkFreeCommandBuffers(app.device, app.commandPool, static_cast<uint32_t>(app.commandBuffers.size()), app.commandBuffers.data());
+  vkDestroyPipeline(app.device, app.graphicsPipeline, nullptr);
+  vkDestroyPipelineLayout(app.device, app.pipelineLayout, nullptr);
+  vkDestroyRenderPass(app.device, app.renderPass, nullptr);
+  for (auto imageView : app.swapChainImageViews) {
+    vkDestroyImageView(app.device, imageView, nullptr);
+  }
+  vkDestroySwapchainKHR(app.device, app.swapChain, nullptr);
+}
+
+/**
+ * Recreate the swapchain in case it becomes incompatible with the underlying surface
+ * e.g. window resize.
+ * Could also possibly recreate swapchain on the fly while old swapchain is still in flight
+ * by providing it as a parameter 'oldSwapChain' in the VkswapchainCreateInfoKHR function.
+ *
+ * @return
+ */
+VkResult recreateSwapChain() {
+  // handles window minimization
+  int width = 0, height = 0;
+  glfwGetFramebufferSize(app.window, &width, &height);
+  while(width == 0 || height == 0) {
+    glfwGetFramebufferSize(app.window, &width, &height);
+    glfwWaitEvents();
+  }
+
+  vkDeviceWaitIdle(app.device);
+  std::cout << "Cleaning up current swapchain" << std::endl;
+  cleanupSwapChain();
+  VkResult errorCode;
+  errorCode = createSwapChain(app); // rebuild swapchain
+  returnOnError(errorCode)
+  errorCode = createImageViews(app); // rebuild image views since they are directly tied to chain
+  returnOnError(errorCode)
+  errorCode = createRenderPass(app); // rebuild render pass since it depends on the format of the swapchain images
+  returnOnError(errorCode)
+  errorCode = createGraphicsPipeline(app); // could possibly avoid this by using dynamic state for viewports and scissor rectangles
+  returnOnError(errorCode)
+  errorCode = createFramebuffers(app); // rebuild framebuffers since all the above has changed
+  returnOnError(errorCode)
+  errorCode = createCommandBuffers(app); // and same for command buffers (not for command pool!)
+  returnOnError(errorCode)
+  std::cout << "Swapchain successfully recreated" << std::endl;
+}
+
+void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
+  auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+  app->framebufferResized = true;
+}
+
+void initWindow() {
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-  return glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+//  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // make window resizable since it is handled correctly
+  app.window = glfwCreateWindow(WIDTH, HEIGHT, "JK!", nullptr, nullptr);
+  glfwSetWindowUserPointer(app.window, &app);
+  glfwSetFramebufferSizeCallback(app.window, framebufferResizeCallback);
 }
 
 VkResult initVulkan() {
@@ -165,7 +227,14 @@ VkResult drawFrame() {
   // as well using the inFlightFences (which are used for synchronizing all resources for each frame, guaranteeing they are used only on one frame
   // at a time)
   VkResult errorCode = vkAcquireNextImageKHR(app.device, app.swapChain, UINT64_MAX, app.imageAvailableSemaphores[app.currentFrame], VK_NULL_HANDLE, &imageIndex);
-  throwOnError(errorCode, "Failed to acquire next image")
+  if(errorCode == VK_ERROR_OUT_OF_DATE_KHR) {
+    std::cout << "Swapchain out of date, recreating" << std::endl;
+    errorCode = recreateSwapChain();
+    return errorCode; // return early to try next draw call with recreated chain
+  } else if (errorCode != VK_SUCCESS && errorCode != VK_SUBOPTIMAL_KHR) {
+    throwOnError(errorCode, "Failed to acquire next image")
+  }
+
   // it is possible that we've been assigned an images from the swapchain that is still 'in-flight' and we must wait for it to become available
   if(app.imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
     vkWaitForFences(app.device, 1, &app.imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
@@ -190,7 +259,7 @@ VkResult drawFrame() {
   submitInfo.pSignalSemaphores = signalSemaphores;
 
   vkResetFences(app.device, 1, &app.inFlightFences[app.currentFrame]);
-// both a signal semaphore (render finished) and fences are used for synchronization on the queue operations
+  // both a signal semaphore (render finished) and fences are used for synchronization on the queue operations
   errorCode = vkQueueSubmit(app.graphicsQueue, 1, &submitInfo, app.inFlightFences[app.currentFrame]);
   throwOnError(errorCode, "Failed to submit draw command buffer")
 
@@ -205,7 +274,14 @@ VkResult drawFrame() {
   presentInfo.pResults = nullptr; // optional
 
   errorCode = vkQueuePresentKHR(app.presentQueue, &presentInfo);
-  throwOnError(errorCode, "Queue present failed")
+  if(errorCode == VK_ERROR_OUT_OF_DATE_KHR || errorCode == VK_SUBOPTIMAL_KHR || app.framebufferResized) {
+    std::cout << "Framebuffer resized, recreating swapchain" << std::endl;
+    app.framebufferResized = false; // manually check because it is not guaranteed that all platforms will respond with the appropriate error code
+    recreateSwapChain(); // recreate but don't return early since the frame has been presented
+    errorCode = VK_SUCCESS;
+  } else if (errorCode != VK_SUCCESS) {
+    throwOnError(errorCode, "Queue present failed")
+  }
 
   app.currentFrame = (app.currentFrame + 1) % MAX_FRAMES_IN_FLIGHT; // advance to next frame
   error:
@@ -232,24 +308,14 @@ int mainLoop() {
  * @return
  */
 int cleanup() {
+  cleanupSwapChain();
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     vkDestroySemaphore(app.device, app.renderFinishedSemaphores[i], nullptr);
     vkDestroySemaphore(app.device, app.imageAvailableSemaphores[i], nullptr);
     vkDestroyFence(app.device, app.inFlightFences[i], nullptr);
   }
   vkDestroyCommandPool(app.device, app.commandPool, nullptr);
-  for (const auto &framebuffer : app.swapChainFramebuffers) {
-    vkDestroyFramebuffer(app.device, framebuffer, nullptr);
-  }
-  vkDestroyPipeline(app.device, app.graphicsPipeline, nullptr);
-  vkDestroyPipelineLayout(app.device, app.pipelineLayout, nullptr);
-  vkDestroyRenderPass(app.device, app.renderPass, nullptr);
-  for (auto imageView : app.swapChainImageViews) {
-    vkDestroyImageView(app.device, imageView, nullptr);
-  }
-  vkDestroySwapchainKHR(app.device, app.swapChain, nullptr);
   vkDestroyDevice(app.device, nullptr);
-
   if (enableValidationLayers) {
     cleanupDebugMessenger(app.instance, app.debugMessenger);
   }
@@ -262,9 +328,7 @@ int cleanup() {
 }
 
 int runApplication() {
-  GLFWwindow *window = initWindow();
-  app.window = window;
-
+  initWindow();
   int errorCode = initVulkan();
   returnOnError(errorCode)
   errorCode = mainLoop();

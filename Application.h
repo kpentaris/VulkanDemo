@@ -48,5 +48,7 @@ typedef struct Application {
     std::vector<VkFence> inFlightFences;
     std::vector<VkFence> imagesInFlight;
     size_t currentFrame = 0;
+
+    bool framebufferResized = false; // manual handling of window resize event
 } Application;
 #endif //VULKANDEMO_APPLICATION_H
