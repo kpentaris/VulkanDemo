@@ -5,9 +5,11 @@
 
 #include <vulkan/vulkan.h>
 #include <vector>
+#include <array>
 #include <iostream>
 #include "GraphicsPipeline.h"
 #include "Shaders.h"
+#include "../buffers/Vertex.h"
 
 /**
  * Takes shader code in a string and creates a VkShaderModule.
@@ -74,10 +76,12 @@ VkResult createGraphicsPipeline(Application &app) {
   // Describes the format of the vertex data that will be passed to the vertex shader
   VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
   vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount = 0;
-  vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-  vertexInputInfo.vertexAttributeDescriptionCount = 0;
-  vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+  auto bindingDescription = getBindingDescription();
+  auto attributeDescriptions = getAttributeDescriptions();
+  vertexInputInfo.vertexBindingDescriptionCount = 1;
+  vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+  vertexInputInfo.pVertexBindingDescriptions = &bindingDescription; // Optional
+  vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data(); // Optional
 
   // Describes the geometry that will be drawn from the vertices. Also describes if primitive restart should be enabled
   VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
