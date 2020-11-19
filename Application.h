@@ -50,5 +50,7 @@ typedef struct Application {
     size_t currentFrame = 0;
 
     bool framebufferResized = false; // manual handling of window resize event
+    VkBuffer vertexBuffer;
+    VkDeviceMemory vertexBufferMemory;
 } Application;
 #endif //VULKANDEMO_APPLICATION_H

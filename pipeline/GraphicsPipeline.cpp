@@ -83,7 +83,7 @@ VkResult createGraphicsPipeline(Application &app) {
   vertexInputInfo.pVertexBindingDescriptions = &bindingDescription; // Optional
   vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data(); // Optional
 
-  // Describes the geometry that will be drawn from the vertices. Also describes if primitive restart should be enabled
+  // Describes the geometry that will be drawn (the vertices). Also describes if primitive restart should be enabled
   VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
   inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

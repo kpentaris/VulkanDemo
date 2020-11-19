@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include "Commands.h"
+#include "../buffers/Vertex.h"
 
 VkResult createCommandPool(Application &app) {
   VkCommandPoolCreateInfo poolInfo{};
@@ -62,7 +63,11 @@ VkResult createCommandBuffers(Application &app) {
 
     vkCmdBindPipeline(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, app.graphicsPipeline);
 
-    vkCmdDraw(app.commandBuffers[i], 3, 1, 0, 0);
+    VkBuffer vertexBuffers[] = {app.vertexBuffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(app.commandBuffers[i], 0, 1, vertexBuffers, offsets);
+
+    vkCmdDraw(app.commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
     vkCmdEndRenderPass(app.commandBuffers[i]);
 

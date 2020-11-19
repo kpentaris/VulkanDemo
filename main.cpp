@@ -8,6 +8,7 @@
 #include "swapchain/images/ImageViews.h"
 #include "pipeline/GraphicsPipeline.h"
 #include "pipeline/Commands.h"
+#include "buffers/Vertex.h"
 #include <vector>
 #include <iostream>
 
@@ -212,6 +213,8 @@ VkResult initVulkan() {
   returnOnError(errorCode)
   errorCode = createCommandPool(app);
   returnOnError(errorCode)
+  errorCode = createVertexBuffer(app);
+  returnOnError(errorCode)
   errorCode = createCommandBuffers(app);
   returnOnError(errorCode)
   errorCode = createSyncObjects(app);
@@ -309,6 +312,8 @@ int mainLoop() {
  */
 int cleanup() {
   cleanupSwapChain();
+  vkDestroyBuffer(app.device, app.vertexBuffer, nullptr);
+  vkFreeMemory(app.device, app.vertexBufferMemory, nullptr);
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     vkDestroySemaphore(app.device, app.renderFinishedSemaphores[i], nullptr);
     vkDestroySemaphore(app.device, app.imageAvailableSemaphores[i], nullptr);
